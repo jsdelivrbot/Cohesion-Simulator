@@ -12,11 +12,17 @@ canvas {
 
 .content {
   display: flex;
-  justify-content: space-around;
+  justify-content: left;
 }
 
-.col {
+.panel {
+  margin-left: 15px;
+  border-radius: 15px;
+}
 
+.filled {
+  background-color: white;
+  padding: 5px;
 }
 
 button {
@@ -35,10 +41,6 @@ button.red {
   background-color: red;
 }
 
-.label {
-  color: blue
-}
-
 input[type=number] {
   width: 70px;
 }
@@ -50,7 +52,7 @@ button:active {
 </style>
 <h1>Cohesion algorithm</h1>
 <div class="content">
-  <div class="panel">
+  <div class="panel filled">
     <table>
       <tr>
         <td><button onclick="spawnUnits()">Spawn</button></td>
@@ -70,6 +72,7 @@ button:active {
     <button onclick="paused = false" class="red">Start</button>
   </div>
   <div class="panel">
+    <p>Left-click to add a new unit, right-click to remove a unit.</p>
     <canvas id="canvas" oncontextmenu="return false;"></canvas>
   </div>
 </div>
@@ -124,7 +127,6 @@ function setupEventListeners() {
 }
 
 function updateUnitValues() {
-  console.log("change")
   let cohesionRange = getNumOf("cohesionRange");
   let speed = getNumOf("speed");
   unitOptions = {
