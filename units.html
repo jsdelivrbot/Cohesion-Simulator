@@ -1,0 +1,315 @@
+<style>
+body {
+  background-color: lightgray;
+}
+canvas {
+  background-color: green;
+  justify-content: flex-start;
+  box-shadow: 3px 3px black;
+  border-radius: 5px;
+  cursor: crosshair;;
+}
+
+.content {
+  display: flex;
+  justify-content: space-around;
+}
+
+.col {
+
+}
+
+button {
+  outline: none;
+  padding: 10px;
+  background-color: green;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  box-shadow: 3px 3px black;
+  margin-bottom: 10px;
+}
+
+button.red {
+  color: white;
+  background-color: red;
+}
+
+.label {
+  color: blue
+}
+
+input[type=number] {
+  width: 70px;
+}
+
+button:active {
+  box-shadow: 2px 2px black;
+}
+
+</style>
+<h1>Cohesion algorithm</h1>
+<div class="content">
+  <div class="panel">
+    <table>
+      <tr>
+        <td><button onclick="spawnUnits()">Spawn</button></td>
+        <td><input type="number" value="5" id="count"></td>
+      </tr>
+      <tr>
+        <td>Cohesion [px]</td>
+        <td><input type="number" value="50" id="cohesionRange"></td>
+      </tr>
+      <tr>
+        <td>Unit Speed [px/s]</td>
+        <td><input type="number" value="30" id="speed"></td>
+      </tr>
+    </table>
+    <button onclick="removeUnits()">Clear</button>
+    <button onclick="paused = true">Pause</button>
+    <button onclick="paused = false" class="red">Start</button>
+  </div>
+  <div class="panel">
+    <canvas id="canvas" oncontextmenu="return false;"></canvas>
+  </div>
+</div>
+
+<script src="https://rawgit.com/Luftare/Vector/master/Vector.js"></script>
+<script src="https://rawgit.com/Luftare/Loop/master/Loop.js"></script>
+<script>
+let units;
+let groups;
+let unitOptions;
+let idCounter = 1;
+let worldSize = 600;
+let colors = ["black", "white", "yellow", "red", "orange", "pink", "blue", "lightblue", "teal", "khaki", "gray", "lime"];
+let paused = false;
+const canvas = document.querySelector("#canvas");
+const ctx = canvas.getContext("2d");
+const loop = new Loop({
+  animationFrame: true,
+  onTick: dt => {
+    canvas.width = canvas.width;//clear screen
+    if(!paused) {
+      updateGroups(groups);
+      units.forEach(u => u.update(dt / 1000));
+    }
+    units.forEach(u => u.draw());
+  }
+});
+
+window.onload = init;
+
+function init() {
+  canvas.height = canvas.width = worldSize;
+  setupEventListeners();
+  restart();
+  loop.start();
+}
+
+function setupEventListeners() {
+  canvas.addEventListener("mousedown", e => {
+    e.preventDefault();
+    let x = e.pageX - canvas.getBoundingClientRect().left;
+    let y = e.pageY - canvas.getBoundingClientRect().top;
+    if(e.which === 1) {
+      createUnit(x, y);
+    } else if(e.which === 3){
+      removeUnit(x, y);
+    }
+  });
+  document.getElementById("count").addEventListener("change", updateUnitValues)
+  document.getElementById("speed").addEventListener("change", updateUnitValues)
+  document.getElementById("cohesionRange").addEventListener("change", updateUnitValues)
+}
+
+function updateUnitValues() {
+  console.log("change")
+  let cohesionRange = getNumOf("cohesionRange");
+  let speed = getNumOf("speed");
+  unitOptions = {
+    cohesionRange,
+    speed,
+  };
+  units.forEach(u => {
+    u.speed = speed;
+    u.cohesionRange = cohesionRange;
+  })
+}
+
+function getNumOf(id) {
+  return parseInt(document.getElementById(id).value);
+}
+
+function restart() {
+  let count = getNumOf("count");
+  let cohesionRange = getNumOf("cohesionRange");
+  let speed = getNumOf("speed");
+  unitOptions = {
+    cohesionRange,
+    speed,
+  };
+  removeUnits();
+  generateUnits(count);
+}
+
+function spawnUnits() {
+  generateUnits(getNumOf("count"))
+}
+
+function createUnit(x, y) {
+  units.push(new Unit({
+    cohesionRange: unitOptions.cohesionRange,
+    speed: unitOptions.speed,
+    x,
+    y,
+  }))
+}
+
+function removeUnit(x, y) {
+  let pos = new Vector(x, y);
+  units = units.filter(u => !u.position.withinRange(pos, u.r));
+}
+
+function removeUnits() {
+  units = [];
+}
+
+function generateUnits(count) {
+  for (var i = 0; i < count; i++) {
+    createUnit(Math.random() * worldSize, Math.random() * worldSize);
+  }
+}
+
+function getGroups(originalUnits) {
+  if(!originalUnits || originalUnits.length < 2) return originalUnits.map(u => [u]);
+  let units = originalUnits.map(u => u);
+  let groups = [units.splice(0, 1)];
+  while(units.length > 0) {
+    let other, unit;
+    let groupFound = false;
+    searchLoop:
+      for (var i = 0; i < units.length; i++) {
+        unit = units[i];
+        let group = groups[groups.length - 1];
+        for (var j = 0; j < group.length; j++) {
+          other = group[j];
+          if(unit.position.withinRange(other.position, unit.cohesionRange / 2 + other.cohesionRange / 2)) {
+            group.push(units.splice(i, 1)[0]);
+            groupFound = true;
+            break searchLoop;
+          }
+        }
+      }
+    if(!groupFound) {
+      groups.push(units.splice(0, 1));
+    }
+  }
+  return groups;
+}
+
+function updateGroups() {
+  groups = getGroups(units);
+  setGroupToUnits(groups, units);
+}
+
+function setGroupToUnits(groups, units) {
+  groups.forEach((group, i) => {
+    group.forEach(unit => {
+      unit.group = i;
+    })
+  })
+}
+
+function isLargestGroup(index) {
+  let size = groups[index].length;
+  let max = groups.map(g => g).sort((a, b) => b.length - a.length)[0].length;
+  return size === max;
+}
+
+function groupsNotEqualSized() {
+  if(groups.length > 1) {
+    let descendingGroups = groups.map(g => g).sort((a, b) => b.length - a.length);
+    return descendingGroups[0].length > descendingGroups[descendingGroups.length - 1].length;
+  } else {
+    return true;
+  }
+}
+
+function getLargestGroup() {
+  return groups.map(g => g).sort((a, b) => b.length - a.length)[0];
+}
+
+function getClosestUnitOfGroup(point, group) {
+  return group.map(g => g).sort((a, b) => a.position.distanceSq(point) - b.position.distanceSq(point))[0];
+}
+
+class Unit {
+  constructor({x, y, cohesionRange, speed}) {
+    this.id = idCounter++;
+    this.position = new Vector(x, y);
+    this.velocity = new Vector(0, 0);
+    this.speed = speed;
+    this.r = 10;
+    this.group = 0;
+    this.cohesionRange = cohesionRange;
+  }
+
+  update(dt) {
+    this.regroup(dt);
+    this.avoidOtherUnits(dt);//overwrite velocity if overlapping with other unit
+    this.move(dt);
+  }
+
+  avoidOtherUnits(dt) {
+    let closest = this.getClosestUnit();
+    if(closest && closest.position.withinRange(this.position, this.r + closest.r)) {
+      this.velocity.set(this.position).substract(closest.position).toLength(this.speed);
+    }
+  }
+
+  regroup(dt) {
+    if(groupsNotEqualSized()) {
+      if(isLargestGroup(this.group)) {
+        this.velocity.zero();
+      } else {
+        let largest = getLargestGroup();
+        let closest = getClosestUnitOfGroup(this.position, largest);
+        this.velocity.set(closest.position).substract(this.position).toLength(this.speed);
+      }
+    } else {
+     let closest = this.getClosestUnitFromOtherGroup();
+     this.velocity.set(closest.position).substract(this.position).toLength(this.speed);
+    }
+  }
+
+  getClosestUnit() {
+    return units.filter(u => u.id !== this.id).sort((a, b) => a.position.distanceSq(this.position) - b.position.distanceSq(this.position))[0];
+  }
+
+  getClosestUnitFromOtherGroup() {
+    return units.filter(u => u.group !== this.group).sort((a, b) => a.position.distanceSq(this.position) - b.position.distanceSq(this.position))[0];
+  }
+
+  move(dt) {
+    this.position.scaledAdd(dt, this.velocity);
+  }
+
+  moveTo(x, y) {
+    this.moveTarget = new Vector(x, y);
+  }
+
+  draw() {
+    ctx.fillStyle = colors[this.group % colors.length];
+    ctx.beginPath();
+    ctx.arc(this.position.x, this.position.y, this.r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "white";
+    ctx.beginPath();
+    ctx.arc(this.position.x, this.position.y, this.cohesionRange / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.stroke();
+  }
+}
+</script>
